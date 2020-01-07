@@ -42,7 +42,7 @@ def factorReturn(sdate, edate):
 
     db = create_engine(uris['multi_factor'])
     meta = MetaData(bind = db)
-    t = Table('factor_return_barra', meta, autoload = True)
+    t = Table('barra_factor_return', meta, autoload = True)
     columns = [
         t.c.trade_date,
         t.c.country,
@@ -94,7 +94,7 @@ def regressionResid(sdate, edate, stocks = None):
 
     db = create_engine(uris['multi_factor'])
     meta = MetaData(bind = db)
-    t = Table('regression_resid_barra', meta, autoload = True)
+    t = Table('barra_regression_resid', meta, autoload = True)
     columns = [
         t.c.trade_date,
         t.c.stock_id,
