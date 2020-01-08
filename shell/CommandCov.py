@@ -130,7 +130,6 @@ def handle(sdate, edate, date):
     
     print('covarianceMatrix of is')
     print(covarianceMatrix)
-    print('task finished!')
 
 
 if __name__ == '__main__':
