@@ -122,9 +122,9 @@ def handle(sdate, edate, date):
     weight.set_index(['trade_date','stock_id'], inplace = True)
     weight.sort_index(axis = 1 , inplace = True)
     w = np.matrix(weight)
-    w = nothing(w)
     
     sigma = np.cov(np.matrix(fr).T)
+    sigma = nothing(sigma)
     omiga = np.diag(resid.apply(lambda x: x**2).mean())
     covarianceMatrix = FactorCovariance(w, sigma, omiga)
     
