@@ -95,10 +95,11 @@ class calculate(object):
         dfAdjCloseG = dfAdjClose.groupby('S_INFO_WINDCODE')
         dfAdjClose = pd.DataFrame(columns = ['pct_change', 'S_INFO_WINDCODE', 'TRADE_DT', 'S_DQ_ADJCLOSE'])
         for stock in stocks:
-            dfTmp = dfAdjCloseG.get_group(stock)
-            dfTmp.sort_values('TRADE_DT', ascending = True, inplace = True)
+            dfTmp = dfAdjCloseG.get_group(stock).copy()
+            dfTmp.sort_values(by = 'TRADE_DT', ascending = True, inplace = True)
             dfTmp.reset_index(inplace = True, drop = True)
-            dfTmp['pct_change'] = dfTmp['S_DQ_ADJCLOSE'].copy().pct_change()
+            pct_change = dfTmp['S_DQ_ADJCLOSE'].pct_change()
+            dfTmp.insert(0, 'pct_change', pct_change)
             dfTmp = dfTmp.fillna(0)
             dfAdjClose = pd.concat([dfAdjClose, dfTmp] , axis = 0, sort = True)
         dfAdjClose.drop_duplicates(['TRADE_DT','S_DQ_ADJCLOSE'], inplace = True)
@@ -107,49 +108,62 @@ class calculate(object):
         # main part
         dfResid = pd.DataFrame(columns = ['trade_date','stock_id','resid'])
         dfParams = pd.DataFrame(columns = ['trade_date'] + ['country'] + styleFactors + industryFactors)
+        dfParams.set_index('trade_date', inplace = True)
         # rn = fc + Sigma(Xi*fi) + Sigma(Xs*fs) + un  Sigma(w*fi) = 0  un is resid
         for date, exposure in dfExposureG:
             dateWind = pd.Timestamp(date).strftime('%Y%m%d')
-            dfAdjClose = dfAdjCloseG.get_group(dateWind)
+            dfAdjClose = dfAdjCloseG.get_group(dateWind).copy()
             dfAdjClose = dfAdjClose.fillna(0)
             exposure = exposure[exposure['stock_id'].isin(dfAdjClose['S_INFO_WINDCODE'])]
-            exposure.sort_values('stock_id', inplace = True)
+            exposure.sort_values(by = 'stock_id', inplace = True)
             exposure = exposure.fillna(0)
 
-            r = np.matrix(dfAdjClose.sort_values('S_INFO_WINDCODE')['pct_change'])
-            w = np.matrix(exposure['weight']/(exposure['weight'].sum())).T
+            r = np.matrix(dfAdjClose.sort_values('S_INFO_WINDCODE')['pct_change']).T
             # exposures of country factor
-            Xc = np.eye(len(exposure))
+            Xc = np.ones((len(exposure),1))
             # exposures of style factor
             Xs = np.matrix(exposure[styleFactors])
             # exposures of industry factor
             Xi = np.matrix(pd.get_dummies(exposure['industry']).sort_index(axis = 1))
             X = np.hstack((Xc,Xs,Xi))
+            w = ((Xi.T) * (np.matrix(exposure['weight']).T)) / (exposure['weight'].sum())
+            w = np.array(w).reshape(len(w),)
             # use generalized linear model
-            ###################  问题一，为什么要开平方加权
-            ###################  问题二，这里的fit是否可以满足 Sigma(w*fi) = 0
             model = sm.GLM(r,X, var_weights = np.sqrt(exposure['weight'].values))
-            result = model.fit_constrained((np.hstack([0],w,np.zeros(len(styleFactors))),0))
+            Q = np.hstack([[0],w,np.zeros(len(styleFactors))])
+            result = model.fit_constrained((Q, 0.0))
             params = result.params
             resid = result.resid_response
 
-            dfP = pd.DataFrame()
-            dfP['trade_date'] = date
+            # industry changes.
+            # sometimes new industries are added sometimes old industires are deleted
+            # we only care about industries in industryList
+            industryList = list(set(exposure['industry']))
+            industryList.sort()
             factors = ['country'] + styleFactors + industryFactors
-            dfP[factors] = params
+            dfP = pd.DataFrame(columns = ['trade_date'] + factors)
+            dfP.set_index('trade_date', inplace =True)
+            for i in range (1 + len(styleFactors)):
+                dfP.loc[date,factors[i]] = params[i]
+            k = 1+len(styleFactors)
+            for ind in industryList:
+                dfP.loc[date,'industry_'+ind] = params[k]
+                k += 1
+            dfP = dfP.fillna(0)            
             dfParams = pd.concat([dfParams, dfP],axis = 0)
             
-            dfR = pd.DataFrame()
-            dfR['trade_date'] = date
+            dfR = pd.DataFrame(columns = ['trade_date','stock_id','resid'])
             dfR['stock_id'] = exposure['stock_id'] 
             dfR['resid'] = resid
+            dfR['trade_date'] = date
             dfResid = pd.concat([dfResid, dfR], axis = 0)
         
         dfParams.sort_index(axis = 1, inplace = True)
-        dfParams.set_index('trade_date', inplace = True)
         # connect to database and update factor returns
         db = create_engine(uris['multi_factor'])
-        sql = "select * from `barra_factor_return` where trade_date >= '" + sdate + "' and trade_date <='" + edate +"'"
+        meta = MetaData(bind = db)
+        t = Table('barra_factor_return', meta, autoload = True)
+        sql = "select trade_date, " + ','.join(dfParams.columns.values) + " from `barra_factor_return` where trade_date >= '" + sdate + "' and trade_date <='" + edate +"'"
         dfBase = pd.read_sql(sql, db)
         dfBase.sort_index(axis = 1, inplace = True)
         dfBase.set_index('trade_date', inplace = True)

@@ -106,8 +106,6 @@ def regressionResid(sdate, edate, stocks = None):
     if stocks != None:
         sql = sql.where(t.c.stock_id.in_(stocks))
     resid = pd.read_sql(sql, db)
-    print(len(set(resid['stock_id'])))
-    set_trace()
 
     return resid
 
@@ -137,6 +135,8 @@ def factorExposure(date, industries, stocks = None):
     ]
     sql = select(columns)
     sql = sql.where(t.c.trade_date == date)
+    if stocks != None:
+        sql = sql.where(t.c.stock_id.in_(stocks))
     exposure = pd.read_sql(sql, db)
 
     w = exposure
@@ -149,8 +149,6 @@ def factorExposure(date, industries, stocks = None):
         w['industry_'+industry][i] = 1
     
     w = w.drop('industry', axis = 1)
-    print(len(set(w['stock_id'])))
-    set_trace()
 
     return w
 
@@ -181,25 +179,21 @@ def handle(sdate, edate, date):
     print(flr)
     
     resid = regressionResid(sdate, edate)
+    stocks = set(resid['stock_id'])
     resid.sort_values(by = ['trade_date','stock_id'],ascending = True, inplace = True)
     resid.set_index(['trade_date','stock_id'], inplace = True)
     resid = resid.unstack()['resid'].fillna(0)
    
-    weight = factorExposure(date, industries)
+    weight = factorExposure(date, industries, stocks)
     weight.sort_values(by = ['trade_date','stock_id'],ascending = True, inplace = True)
     weight.set_index(['trade_date','stock_id'], inplace = True)
     w = np.matrix(weight)
-    print(np.shape(w))
     
     sigma = np.cov(np.matrix(fr).T)
-    print(np.shape(sigma))
-    
     omiga = np.diag(resid.apply(lambda x: x**2).mean())
-    print(np.shape(omiga))
-    
     covarianceMatrix = FactorCovariance(w, sigma, omiga)
     
-    print('covarianceMatrix of '+factor+' is')
+    print('covarianceMatrix of is')
     print(covarianceMatrix)
     print('task finished!')
 

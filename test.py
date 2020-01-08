@@ -6,6 +6,8 @@ from ipdb import set_trace
 
 #print(pd.Timestamp(datetime.today()).strftime('%Y-%m-%d'))
 
+
+
 t = pd.DataFrame()
 t['a'] = [1,2,6,2,3,6,1,4]
 t['b'] = [3,4,5,2,3,4,4,5]
