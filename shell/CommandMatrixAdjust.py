@@ -3,17 +3,19 @@ import numpy as np
 import pandas as pd
 
 # adjust matrix
-class matirxAdjust():
+def nothing(matrix):
+    pass
+    return matrix
 
-    def neweyWest(matrix):
+def neweyWest(matrix):
 
-        return newMatrix
+    return newMatrix
 
-    def eigen(matrix):
+def eigen(matrix):
 
-        return newMatrix
+    return newMatrix
 
-    def fluctuation(matrix):
+def fluctuation(matrix):
 
-        return newMatrix
+    return newMatrix
 

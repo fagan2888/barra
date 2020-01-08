@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import numpy as np
 from config import *
 from db.factors import styleFactors, industryFactors
+from CommandMatrixAdjust import *
 from optparse import OptionParser
 from ipdb import set_trace
 
@@ -121,6 +122,7 @@ def handle(sdate, edate, date):
     weight.set_index(['trade_date','stock_id'], inplace = True)
     weight.sort_index(axis = 1 , inplace = True)
     w = np.matrix(weight)
+    w = nothing(w)
     
     sigma = np.cov(np.matrix(fr).T)
     omiga = np.diag(resid.apply(lambda x: x**2).mean())
