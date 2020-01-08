@@ -4,6 +4,7 @@ import pandas as pd
 from sqlalchemy import *
 from config import *
 from db import database
+from db.factors import styleFactors, industryFactors
 from datetime import datetime, timedelta, date
 import statsmodels.api as sm
 from ipdb import set_trace
@@ -20,47 +21,8 @@ class calculate(object):
         sdate = self.sdate
         edate = self.edate
         
-        # create dataframe of factor returns
-        styleFactors = [
-            'volatility',
-            'dividend_yield',
-            'quality',
-            'momentum',
-            'short_term_reverse',
-            'value',
-            'linear_size',
-            'nonlinear_size',
-            'growth',
-            'liquidity',
-            'sentiment',
-        ]
+        #
         styleFactors.sort()
-        industryFactors = [
-            'industry_6710100000',
-            'industry_6715100000',
-            'industry_6720100000',
-            'industry_6720200000',
-            'industry_6720300000',
-            'industry_6725100000',
-            'industry_6725200000',
-            'industry_6725300000',
-            'industry_6725400000',
-            'industry_6725500000',
-            'industry_6730100000',
-            'industry_6730200000',
-            'industry_6730300000',
-            'industry_6735100000',
-            'industry_6735200000',
-            'industry_6740100000',
-            'industry_6740200000',
-            'industry_6740400000',
-            'industry_6745100000',
-            'industry_6745200000',
-            'industry_6745300000',
-            'industry_6750200000',
-            'industry_6755100000',
-            'industry_6760100000',
-        ]
         industryFactors.sort()
         
         # load factor exposures of every stocks
@@ -186,7 +148,6 @@ class calculate(object):
         sql = sql.where(t.c.trade_date <= edate)
         dfBase = pd.read_sql(sql, db)
         dfBase.set_index(['trade_date','stock_id'], inplace = True)
-
         database.batch(db,t,dfResid,dfBase,timestamp = False)
         print('regression reside updated!')
 

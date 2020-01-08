@@ -2,6 +2,13 @@ import numpy as np
 import pandas as pd
 from ipdb import set_trace
 
+df = pd.DataFrame({'a':[1,1,1,1],'c':[2,2,2,2],'b':[3,3,3,3],'d':[1,2,3,4]})
+df.set_index('a', inplace = True)
+print(df)
+set_trace()
+df.sort_index(axis = 1, inplace = True)
+print(df)
+set_trace()
 
 ac = ['a1','a2','a3']
 df = pd.DataFrame(columns = ['date']+ac)

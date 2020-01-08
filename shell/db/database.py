@@ -44,6 +44,12 @@ def connection(key):
 
     return None
 
+def chunks(l, n):
+    """Yield successive n-sized chunks from l."""
+    # pdb.set_trace()
+    for i in range(0, len(l), n):
+        yield l[i:i + n]
+
 
 @event.listens_for(engine, "connect")
 def connect(dbapi_connection, connection_record):

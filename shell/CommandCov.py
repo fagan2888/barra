@@ -5,86 +5,18 @@ from sqlalchemy import *
 from datetime import datetime, timedelta
 import numpy as np
 from config import *
+from db.factors import styleFactors, industryFactors
 from optparse import OptionParser
 from ipdb import set_trace
 
-# payback and resid is calculated in factor_return_barra.py
-
-industries = [
-    '6710100000',
-    '6715100000',
-    '6720100000',
-    '6720200000',
-    '6720300000',
-    '6725100000',
-    '6725200000',
-    '6725300000',
-    '6725400000',
-    '6725500000',
-    '6730100000',
-    '6730200000',
-    '6730300000',
-    '6735100000',
-    '6735200000',
-    '6740100000',
-    '6740200000',
-    '6740400000',
-    '6745100000',
-    '6745200000',
-    '6745300000',
-    '6750200000',
-    '6755100000',
-    '6760100000',
-    ]
+# payback and resid is calculated in CommandCal.py
+industryFactors.sort()
  
 # load factor return 
 def factorReturn(sdate, edate):
 
     db = create_engine(uris['multi_factor'])
-    meta = MetaData(bind = db)
-    t = Table('barra_factor_return', meta, autoload = True)
-    columns = [
-        t.c.trade_date,
-        t.c.country,
-        t.c.volatility,
-        t.c.dividend_yield,
-        t.c.quality,
-        t.c.momentum,
-        t.c.short_term_reverse,
-        t.c.value,
-        t.c.linear_size,
-        t.c.nonlinear_size,
-        t.c.growth,
-        t.c.liquidity,
-        t.c.sentiment,
-        t.c.industry_6710100000,
-        t.c.industry_6715100000,
-        t.c.industry_6720100000,
-        t.c.industry_6720200000,
-        t.c.industry_6720300000,
-        t.c.industry_6725100000,
-        t.c.industry_6725200000,
-        t.c.industry_6725300000,
-        t.c.industry_6725400000,
-        t.c.industry_6725500000,
-        t.c.industry_6730100000,
-        t.c.industry_6730200000,
-        t.c.industry_6730300000,
-        t.c.industry_6735100000,
-        t.c.industry_6735200000,
-        t.c.industry_6740100000,
-        t.c.industry_6740200000,
-        t.c.industry_6740400000,
-        t.c.industry_6745100000,
-        t.c.industry_6745200000,
-        t.c.industry_6745300000,
-        t.c.industry_6750200000,
-        t.c.industry_6755100000,
-        t.c.industry_6760100000,
-    ]
-    sql = select(columns)
-    sql = sql.where(t.c.trade_date >= sdate)
-    sql = sql.where(t.c.trade_date <= edate)
+    sql = "select * from `barra_factor_return` where trade_date >= '" + sdate + "' and trade_date <='" + edate +"'"
     payback = pd.read_sql(sql, db)
 
     return payback
@@ -110,7 +42,7 @@ def regressionResid(sdate, edate, stocks = None):
     return resid
 
 # load factor exposure of every stock or some stocks
-def factorExposure(date, industries, stocks = None):
+def factorExposure(date, industryFactors, stocks = None):
 
     db = create_engine(uris['multi_factor'])
     meta = MetaData(bind = db)
@@ -142,11 +74,10 @@ def factorExposure(date, industries, stocks = None):
     w = exposure
     w['country'] = 1
     
-    for industry in industries:
-        w['industry_'+industry] = 0
+    for industry in industryFactors:
+        w[industry] = 0
     for i in range(len(w)):
-        industry = w['industry'][i]
-        w['industry_'+industry][i] = 1
+        w['industry_'+str(w['industry'][i])][i] = 1
     
     w = w.drop('industry', axis = 1)
 
@@ -172,6 +103,7 @@ def handle(sdate, edate, date):
     fr = factorReturn(sdate, edate)
     fr.set_index('trade_date', inplace = True)
     fr.sort_index(ascending = True, inplace = True)
+    fr.sort_index(axis = 1, inplace = True)
     fr = fr.fillna(0)
    
     flr = FactorFluctuation(fr)
@@ -184,9 +116,10 @@ def handle(sdate, edate, date):
     resid.set_index(['trade_date','stock_id'], inplace = True)
     resid = resid.unstack()['resid'].fillna(0)
    
-    weight = factorExposure(date, industries, stocks)
+    weight = factorExposure(date, industryFactors, stocks)
     weight.sort_values(by = ['trade_date','stock_id'],ascending = True, inplace = True)
     weight.set_index(['trade_date','stock_id'], inplace = True)
+    weight.sort_index(axis = 1 , inplace = True)
     w = np.matrix(weight)
     
     sigma = np.cov(np.matrix(fr).T)
