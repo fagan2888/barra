@@ -9,9 +9,30 @@ import math
 def nothing(matrix):
     
     pass
+    
     return matrix
 
-# fr = [factor returns, moments]
+# exponent weighed adjustment
+# f(i,j) = std(i) * std(j) * r(i,j)
+# when calculating std and r different half-life are setted
+# fr = [factor returns, moments] and sorted by moments
+def exponentWeight(fr, halfLifeStd = 252, halfLifeR = 84):
+
+    w = 0.5**(1 / halfLifeStd) * np.matrix((np.linspace(1,np,shape(fr)[1],np.shape(fr)[1])))
+    w = np.diag(w)
+    frStd = np.dot(fr, w)
+    std = np.std(frStd, axis = 1) 
+
+    w = 0.5**(1 / halfLifeR) * np.matrix((np.linspace(1,np,shape(fr)[1],np.shape(fr)[1])))
+    w = np.diag(w)
+    frR = np.dot(fr, w)
+    r = np.corrcoef(frR)
+
+    newMatrix = np.dot(std, std) * r
+
+    return newMatrix
+
+# fr = [factor returns, moments] and sorted by moments
 # cov0 = Sigma(fri*fri.T)/t (1~t)
 # cov = cov0 + Sigma(wi*(covi + covi.T)) (1~q) , wi = 1 - i/(1+q), covi = Sigma(frj*frj+i.T)/t (1~t-i)
 # factor return frt  of moment 't' is influenced by moments of 't-1','t-2','t-3' ...... 't-q'
