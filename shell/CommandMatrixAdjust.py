@@ -34,15 +34,19 @@ def exponentWeight(fr, halfLifeStd = 252, halfLifeR = 84):
 
 # fr = [factor returns, moments] and sorted by moments
 # cov0 = Sigma(fri*fri.T)/t (1~t)
+# cov0 can be inplaced by matrix that has already been adjusted by exponentWeight()
 # cov = cov0 + Sigma(wi*(covi + covi.T)) (1~q) , wi = 1 - i/(1+q), covi = Sigma(frj*frj+i.T)/t (1~t-i)
 # factor return frt  of moment 't' is influenced by moments of 't-1','t-2','t-3' ...... 't-q'
-def neweyWest(fr, q):
+def neweyWest(exponentWeightMat, q):
     
+    '''
     cov0 = np.zeros((np.shape(fr)[0],np.shape(fr)[0]))
     t = np.shape(fr)[1]
     for i in range (t):
         cov0 = cov0 + np.dot(fr[:,i],fr[:,i].T)
     cov0 = cov0/t
+    '''
+    cov0 = exponentWeightMat
 
     sigmaCov = np.zeros((np.shape(fr)[0],np.shape(fr)[0]))
     t = np.shape(fr)[1]

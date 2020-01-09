@@ -240,7 +240,17 @@ def handle(sdate, edate, date):
     w = np.matrix(weight)
     
     sigma = np.cov(np.matrix(fr).T)
+    # do some adjustment
     sigma = nothing(sigma)
+    # exponent weighed adjustment
+    sigma = exponentWeight(fr, halfLifeStd = 252, halfLifeR = 84)
+    # newey-west adjustment
+    sigma = neweyWest(sigma, q = )
+    # eigen adjustment
+    sigma = eigen(sigma, fr, M = 1000, alpha = 1.2)
+    # fluctuation ratio adjustment
+    sigma = fluctuation(sigma, fr, flr)
+
     omiga = np.diag(resid.apply(lambda x: x**2).mean())
     covarianceMatrix = FactorCovariance(w, sigma, omiga)
     
