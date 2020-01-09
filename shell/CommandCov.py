@@ -133,18 +133,15 @@ def saveFactorCovariance(mat, names, date, sdate = None, edate = None):
     df = pd.DataFrame(columns = ['bf_date','bf_factor1','bf_factor2','bf_cov'])
     dfFactor1 = list()
     dfFactor2 = list()
-    allFactor = list()
     covij = list()
     i = 0
     for name1 in names:
-        j = 0
-        for name2 in names:
-            if name2+name1 not in allFactor:
-                dfFactor1.append(name1)
-                dfFactor2.append(name2)
-                covij.append(mat[i,j])
-                allFactor.append(name1+name2)
-                j += 1
+        j = i
+        for name2 in names[i:]:
+            dfFactor1.append(name1)
+            dfFactor2.append(name2)
+            covij.append(mat[i,j])
+            j += 1
         i += 1
     df['bf_factor1'] = dfFactor1
     df['bf_factor2'] = dfFactor2
@@ -179,18 +176,15 @@ def saveStockCovariance(mat, names, date, sdate = None, edate = None):
     df = pd.DataFrame(columns = ['bc_date','bc_stock1','bc_stock2','bc_cov'])
     dfStock1 = list()
     dfStock2 = list()
-    allStock = list()
     covij = list()
     i = 0
     for name1 in names:
-        j = 0
-        for name2 in names:
-            if name2+name1 not in allStock:
-                dfStock1.append(name1)
-                dfStock2.append(name2)
-                covij.append(mat[i,j])
-                allStock.append(name1+name2)
-                j += 1
+        j = i
+        for name2 in names[i:]:
+            dfStock1.append(name1)
+            dfStock2.append(name2)
+            covij.append(mat[i,j])
+            j += 1
         i += 1
     df['bc_stock1'] = dfStock1
     df['bc_stock2'] = dfStock2
