@@ -2,6 +2,14 @@ import numpy as np
 import pandas as pd
 from ipdb import set_trace
 
+a = np.ones((2,1))
+a = a + [[1],[2]]
+b = [[2],[3]]
+print(a)
+print(b)
+print(np.sum(a[:,0]))
+set_trace()
+
 df = pd.DataFrame({'a':[1,1,1,1],'c':[2,2,2,2],'b':[3,3,3,3],'d':[1,2,3,4]})
 df.set_index('a', inplace = True)
 print(df)

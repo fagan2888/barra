@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import numpy as np
 from config import *
 from db.factors import styleFactors, industryFactors
+from db import database
 from CommandMatrixAdjust import *
 from optparse import OptionParser
 from ipdb import set_trace
@@ -98,6 +99,86 @@ def FactorCovariance(w, sigma, omiga):
 
     return covarianceMatrix
 
+# save factor return fluctuation ratio into barra_fluctuation_ratio
+def saveFlr(flr, sdate = None, edate = None):
+
+    df = pd.DataFrame(columns = ['bf_date','bf_factor','bf_flr'])
+    ################# do something ###################
+    df.set_index(['bf_date','bf_factor'], inplace = True)
+
+    db = create_engine(uris['multi_factor'])
+    meta = Meta(bind = db)
+    t = Table('barra_fluctuation_ratio', meta, autoload = True)
+    columns = [
+        t.c.bf_date,
+        t.c.bf_factor,
+        t.c.bf_flr,
+    ]
+    sql = select(columns)
+    if sdate != None:
+        sql = sql.where(t.c.bf_date >= sdate)
+    if edate != None:
+        sql = sql.where(t.c.bf_date <= edate)
+    dfBase = pd.read_sql(sql, db)
+    dfBase['bf_date'] = dfBase['bf_date'].map(lambda x: pd.Timestamp(x).strftime('%Y-%m-%d'))
+    dfBase.set_index(['bf_date','bf_factor'], inplace = True)
+
+    database.batch(db, t, df, dfBase, timestamp = False)
+
+# save factor return covariance into barra_factor_covariance
+def saveFactorCovariance(mat, sdate = None, edate = None):
+
+    df = pd.DataFrame(columns = ['bf_date','bf_factor1','bf_factor2','bf_cov'])
+    ############## do something #########################
+    df.set_index(['bf_date','bf_factor1','bf_factor2'], inplace = True)
+
+    db = create_engine(uris['multi_factor'])
+    meta = Meta(bind = db)
+    t = Table('barra_factor_covariance', meta, autoload = True)
+    columns = [
+        t.c.bf_date,
+        t.c.bf_factor1,
+        t.c.bf_factor2,
+        t.c.bf_cov,
+    ]
+    sql = select(columns)
+    if sdate != None:
+        sql = sql.where(t.c.bf_date >= sdate)
+    if edate != None:
+        sql = sql.where(t.c.bf_date <= edate)
+    dfBase = pd.read_sql(sql, db)
+    dfBase['bf_date'] = dfBase['bf_date'].map(lambda x: pd.Timestamp(x).strftime('%Y-%m-%d'))
+    dfBase.set_index(['bf_date','bf_factor1','bf_factor2'], inplace = True)
+
+    database.batch(db, t, df, dfBase, timestamp = False)
+
+# save stock return covariance into barra_covariance
+def saveStockCovariance(mat, sdate = None, edate = None):
+
+    df = pd.DataFrame(columns = ['bc_date','bc_stock1','bc_stock2','bc_cov'])
+    ################ do something ########################
+    df.set_index(['bc_date','bc_stock1','bc_stock2'], inplace = True)
+
+    db = create_engine(uris['multi_factor'])
+    meta = Meta(bind = db)
+    t = Table('barra_covariance', meta, autoload = True)
+    columns = [
+        t.c.bc_date,
+        t.c.bc_stock1,
+        t.c.bc_stock2,
+        t.c.bc_cov,
+    ]
+    sql = select(columns)
+    if sdate != None:
+        sql = sql.where(t.c.bc_date >= sdate)
+    if edate != None:
+        sql = sql.where(t.c.bc_date <= edate)
+    dfBase = pd.read_sql(sql, db)
+    dfBase['bc_date'] = dfBase['bc_date'].map(lambda x: pd.Timestamp(x).strftime('%Y-%m-%d'))
+    dfBase.set_index(['bc_date','bc_stock1','bc_stock2'], inplace = True)
+
+    database.batch(db, t, df, dfBase, timestamp = False)
+
 # main function
 def handle(sdate, edate, date):
     
@@ -110,6 +191,7 @@ def handle(sdate, edate, date):
     flr = FactorFluctuation(fr)
     print('fluctuation rate of every factors are as folllows:')
     print(flr)
+    #saveFlr(flr)
     
     resid = regressionResid(sdate, edate)
     stocks = set(resid['stock_id'])
@@ -130,6 +212,8 @@ def handle(sdate, edate, date):
     
     print('covarianceMatrix of is')
     print(covarianceMatrix)
+    #saveFactorCovariance(sigma)
+    #saveStockCovariance(covarianceMatrix)
 
 
 if __name__ == '__main__':

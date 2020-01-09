@@ -1,6 +1,8 @@
 
 import numpy as np
 import pandas as pd
+import random
+import math
 
 # matrix adjustment
 
@@ -9,7 +11,7 @@ def nothing(matrix):
     pass
     return matrix
 
-# fr = [factors, moments]
+# fr = [factor returns, moments]
 # cov0 = Sigma(fri*fri.T)/t (1~t)
 # cov = cov0 + Sigma(wi*(covi + covi.T)) (1~q) , wi = 1 - i/(1+q), covi = Sigma(frj*frj+i.T)/t (1~t-i)
 # factor return frt  of moment 't' is influenced by moments of 't-1','t-2','t-3' ...... 't-q'
@@ -38,11 +40,61 @@ def neweyWest(fr, q):
 
     return newMatrix
 
+# adjustment based on eigen values is based on neweyWest adjustment
+# d0 = u0.T*neweyWestMat*u0  u0 = eigVector
+# rm = u0 * bm   fm = cov(rm, rm) dm = um.T*fm*um dmReal = um.T*neweyWest*um
+# lamda = sqrt(Sigma(dmReal/dm)/m) (m = 1,2,3 ...... M) 
+# gama = alpha*(lamda-1)+1 d0Real = gama**2 * d0 
+# eigenMat = u0*d0Real*u0.T
+def eigen(neweyWestMat, fr, M = 1000, alpha = 1.2):
 
-def eigen(matrix):
+    eigValues, eigVectors = np.linalg.eig(neweyWestMat)
+    u0 = eigVectors
+    d0 = u0.T * neweyWestMat * u0
+    
+    # try M times
+    sigma = np.zeros((M,1))
+    for m in range(M):
+        bm = np.zeros((np.shape(d0)[0],1))
+        for i in range(np.shape(d0)[0]):
+            bm[i][0] = random.normalvariate(0, sqrt(d0[i][i]))
+        rm = u0 * bm
+        fm = np.cov(rm)
+        em, um = np.linalg.eig(fm)
+        dm = um.T * fm * um
+        dmReal = um.T * neweyWest * um
+        sigma = sigma + dmReal / dm 
+
+    lamda = np.sqrt(sigma/M)
+    gama = alpha * (lamda - 1) + 1
+    d0Real = gama**2 * d0
+    newMatrix = u0 * d0Real * u0.T
 
     return newMatrix
 
+# adjustment based on fluctuation ratio is based on eigen adjustment
+# the number of factors is K
+# bft = sqrt((frkt/flrkt)**2 /K)  fr is factor return is. flr is fluctuation.
+# lamda = sqrt(sigma(bft**2, wt))
+# fvar = lamda**2 * feigen
+def fluctuation(eigenMat, fr, flr):
+     
+    sigma = np.zeros((np.shape(fr)[1],1))
+    for i in range(np.shape(sigma)[0]):
+        sigma[i] = (fr[:,i]/flr[:,i])**2
+    bf = np.sqrt(sigma/np.shape(fr)[0])
+    w = np.zeros((np.shape(fr)[0],))
+    for i in range(np.shape(w)[0]):
+        w[i] = 0.5**((np.shape(w)[0]-i-1)/np.shape(w)[0])
+    w = w / np.sum(w)
+    i = 0
+    lamda = 0
+    for bft in bf:
+        lamda = lamda + bft**2*w[i]
+        i += 1
+    newMatrix = lamda * eigenMat
+
+    return newMatrix
 
 
 #####################################
