@@ -100,15 +100,17 @@ def FactorCovariance(w, sigma, omiga):
     return covarianceMatrix
 
 # save factor return fluctuation ratio into barra_fluctuation_ratio
-def saveFlr(flr, sdate = None, edate = None):
+def saveFlr(flr, date, sdate = None, edate = None):
 
     df = pd.DataFrame(columns = ['bf_date','bf_factor','bf_flr'])
-    ################# do something ###################
+    df['bf_factor'] = flr.index
+    df['bf_flr'] = flr.values
+    df['bf_date'] = date
     df.set_index(['bf_date','bf_factor'], inplace = True)
 
     db = create_engine(uris['multi_factor'])
-    meta = Meta(bind = db)
-    t = Table('barra_fluctuation_ratio', meta, autoload = True)
+    meta = MetaData(bind = db)
+    t = Table('barra_factor_fluctuation_ratio', meta, autoload = True)
     columns = [
         t.c.bf_date,
         t.c.bf_factor,
@@ -126,14 +128,33 @@ def saveFlr(flr, sdate = None, edate = None):
     database.batch(db, t, df, dfBase, timestamp = False)
 
 # save factor return covariance into barra_factor_covariance
-def saveFactorCovariance(mat, sdate = None, edate = None):
+def saveFactorCovariance(mat, names, date, sdate = None, edate = None):
 
     df = pd.DataFrame(columns = ['bf_date','bf_factor1','bf_factor2','bf_cov'])
-    ############## do something #########################
+    dfFactor1 = list()
+    dfFactor2 = list()
+    allFactor = list()
+    covij = list()
+    i = 0
+    for name1 in names:
+        j = 0
+        for name2 in names:
+            if name2+name1 not in allFactor:
+                dfFactor1.append(name1)
+                dfFactor2.append(name2)
+                covij.append(mat[i,j])
+                allFactor.append(name1+name2)
+                j += 1
+        i += 1
+    df['bf_factor1'] = dfFactor1
+    df['bf_factor2'] = dfFactor2
+    df['bf_cov'] = covij
+    df['bf_date'] = date
+    df['bf_date'] = df['bf_date'].map(lambda x: pd.Timestamp(x).strftime('%Y-%m-%d'))
     df.set_index(['bf_date','bf_factor1','bf_factor2'], inplace = True)
-
+    
     db = create_engine(uris['multi_factor'])
-    meta = Meta(bind = db)
+    meta = MetaData(bind = db)
     t = Table('barra_factor_covariance', meta, autoload = True)
     columns = [
         t.c.bf_date,
@@ -153,14 +174,33 @@ def saveFactorCovariance(mat, sdate = None, edate = None):
     database.batch(db, t, df, dfBase, timestamp = False)
 
 # save stock return covariance into barra_covariance
-def saveStockCovariance(mat, sdate = None, edate = None):
+def saveStockCovariance(mat, names, date, sdate = None, edate = None):
 
     df = pd.DataFrame(columns = ['bc_date','bc_stock1','bc_stock2','bc_cov'])
-    ################ do something ########################
+    dfStock1 = list()
+    dfStock2 = list()
+    allStock = list()
+    covij = list()
+    i = 0
+    for name1 in names:
+        j = 0
+        for name2 in names:
+            if name2+name1 not in allStock:
+                dfStock1.append(name1)
+                dfStock2.append(name2)
+                covij.append(mat[i,j])
+                allStock.append(name1+name2)
+                j += 1
+        i += 1
+    df['bc_stock1'] = dfStock1
+    df['bc_stock2'] = dfStock2
+    df['bc_cov'] = covij
+    df['bc_date'] = date
+    df['bc_date'] = df['bc_date'].map(lambda x: pd.Timestamp(x).strftime('%Y-%m-%d'))
     df.set_index(['bc_date','bc_stock1','bc_stock2'], inplace = True)
 
     db = create_engine(uris['multi_factor'])
-    meta = Meta(bind = db)
+    meta = MetaData(bind = db)
     t = Table('barra_covariance', meta, autoload = True)
     columns = [
         t.c.bc_date,
@@ -189,15 +229,15 @@ def handle(sdate, edate, date):
     fr = fr.fillna(0)
    
     flr = FactorFluctuation(fr)
-    print('fluctuation rate of every factors are as folllows:')
-    print(flr)
-    #saveFlr(flr)
-    
+    saveFlr(flr = flr, date = date)
+    print('Factor return fluctucation saved! Check barra_factor_fluctucation_ration to see more details.')
+
     resid = regressionResid(sdate, edate)
     stocks = set(resid['stock_id'])
     resid.sort_values(by = ['trade_date','stock_id'],ascending = True, inplace = True)
     resid.set_index(['trade_date','stock_id'], inplace = True)
     resid = resid.unstack()['resid'].fillna(0)
+    stockIds = list(resid.columns)
    
     weight = factorExposure(date, industryFactors, stocks)
     weight.sort_values(by = ['trade_date','stock_id'],ascending = True, inplace = True)
@@ -210,10 +250,11 @@ def handle(sdate, edate, date):
     omiga = np.diag(resid.apply(lambda x: x**2).mean())
     covarianceMatrix = FactorCovariance(w, sigma, omiga)
     
-    print('covarianceMatrix of is')
-    print(covarianceMatrix)
-    #saveFactorCovariance(sigma)
-    #saveStockCovariance(covarianceMatrix)
+    factorNames = list(fr.columns)
+    saveFactorCovariance(sigma, factorNames, date)
+    print('Factor return covariance saved! Check barra_factor_covariance to see more details.') 
+    saveStockCovariance(covarianceMatrix, stockIds, date)
+    print('Stock return covariance saved! Check barra_stock_covariance to see more details.')
 
 
 if __name__ == '__main__':
