@@ -85,7 +85,7 @@ def factorExposure(date, industryFactors, stocks = None):
 
     return w
 
-# calculate factor fluctuation rate
+# calculate factor fluctuation ratio
 def FactorFluctuation(factorReturn):
     
     flr = factorReturn.std()
@@ -98,6 +98,13 @@ def FactorCovariance(w, sigma, omiga):
     covarianceMatrix = np.dot(np.dot(w,sigma),w.T) + omiga
 
     return covarianceMatrix
+
+# calculate stock fluctuation ratio
+def stockFluctuation(stockResid):
+
+    stockFlr = stockResid.std()
+
+    return stockFlr
 
 # save factor return fluctuation ratio into barra_fluctuation_ratio
 def saveFlr(flr, date, sdate = None, edate = None):
@@ -126,6 +133,35 @@ def saveFlr(flr, date, sdate = None, edate = None):
     dfBase.set_index(['bf_date','bf_factor'], inplace = True)
 
     database.batch(db, t, df, dfBase, timestamp = False)
+
+# save factor return fluctuation ratio into barra_fluctuation_ratio
+def saveStockFlr(stockFlr, date, sdate = None, edate = None):
+
+    df = pd.DataFrame(columns = ['br_date','br_stock_id','br_flr'])
+    df['br_stock_id'] = stockFlr.index
+    df['br_flr'] = stockFlr.values
+    df['br_date'] = date
+    df.set_index(['br_date','br_stock_id'], inplace = True)
+
+    db = create_engine(uris['multi_factor'])
+    meta = MetaData(bind = db)
+    t = Table('barra_resid_fluctuation_ratio', meta, autoload = True)
+    columns = [
+        t.c.br_date,
+        t.c.br_stock_id,
+        t.c.br_flr,
+    ]
+    sql = select(columns)
+    if sdate != None:
+        sql = sql.where(t.c.br_date >= sdate)
+    if edate != None:
+        sql = sql.where(t.c.br_date <= edate)
+    dfBase = pd.read_sql(sql, db)
+    dfBase['br_date'] = dfBase['br_date'].map(lambda x: pd.Timestamp(x).strftime('%Y-%m-%d'))
+    dfBase.set_index(['br_date','br_stock_id'], inplace = True)
+
+    database.batch(db, t, df, dfBase, timestamp = False)
+
 
 # save factor return covariance into barra_factor_covariance
 def saveFactorCovariance(mat, names, date, sdate = None, edate = None):
@@ -221,10 +257,11 @@ def handle(sdate, edate, date):
     fr.sort_index(ascending = True, inplace = True)
     fr.sort_index(axis = 1, inplace = True)
     fr = fr.fillna(0)
-   
+    factorNames = list(fr.columns)
+  
     flr = FactorFluctuation(fr)
     saveFlr(flr = flr, date = date)
-    print('Factor return fluctucation saved! Check barra_factor_fluctucation_ration to see more details.')
+    print('Factor return fluctucation saved! Check barra_factor_fluctucation_ratio to see more details.')
 
     resid = regressionResid(sdate, edate)
     stocks = set(resid['stock_id'])
@@ -247,24 +284,40 @@ def handle(sdate, edate, date):
     # all input should be in form of matrix
     sigma = nothing(sigma)
     # exponent weighed adjustment
-    sigma = exponentWeight(fr, halfLifeStd = 252, halfLifeR = 84)
+#    sigma = exponentWeight(fr, halfLifeStd = 252, halfLifeR = 84)
     # newey-west adjustment
-    sigma = neweyWest(sigma, fr, qStd = 5, qR = 2, halfLifeStd = 252, halfLifR = 84)
+#    sigma = neweyWest(sigma, fr, qStd = 5, qR = 2, halfLifeStd = 252, halfLifR = 84)
     # eigen adjustment
-    sigma = eigen(sigma, fr, M = 1000, alpha = 1.2)
+#    sigma = eigen(sigma, fr, M = 1000, alpha = 1.2)
     # fluctuation ratio adjustment
-    sigma = fluctuation(sigma, fr, flr)
+#    sigma = fluctuation(sigma, fr, flr)
 
-    omiga = np.diag(resid.apply(lambda x: x**2).mean())
+    residFlr = stockFluctuation(resid)
+    saveStockFlr(residFlr, date)
+    print('Stock return resid fluctucation saved! Check barra_resid_fluctucation_ratio to see more details.')
+
     # do some adjustment on omiga
-
+    # if do nothing
+    omiga = np.diag(resid.apply(lambda x: x**2).mean())
+    # all input should be in form of matrix
+    resid = np.mat(resid).T
+    residFlr = np.mat(residFlr).T
+    # exponent weighed adjustment
+#    omiga = exponentWeight(resid, halfLifeStd = 84, halfLifeR = 84)
+    # newey-west adjustment
+#    omiga = neweyWest(omiga, resid, qStd = 5, qR = 5, halfLifeStd = 84, halfLife = 84)
+    # structure model adjustment
+#    omiga = structure(omiga)
+    # bayes adjustment
+#    omiga = bayes(omiga)
+    # fluctuation ratio adjustment
+#    omiga = fluctuation(omiga, resid, residFlr)
 
     covarianceMatrix = FactorCovariance(w, sigma, omiga)
     
-    factorNames = list(fr.columns)
     saveFactorCovariance(sigma, factorNames, date)
     print('Factor return covariance saved! Check barra_factor_covariance to see more details.') 
-    saveStockCovariance(covarianceMatrix, stockIds, date)
+    saveStockCovariance(covarianceMatrix, stockIds, date)  ##### slow #####
     print('Stock return covariance saved! Check barra_stock_covariance to see more details.')
 
 

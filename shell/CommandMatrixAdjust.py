@@ -174,6 +174,19 @@ def fluctuation(eigenMat, fr, flr):
 
     return newMatrix
 
+# structure model adjustment
+def structure(mat):
+
+    pass
+
+    return mat
+
+# bayes adjustment
+def bayes(mat):
+
+    pass
+
+    return mat
 
 #####################################
 ##############reference##############
