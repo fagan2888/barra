@@ -38,7 +38,7 @@ def exponentWeight(fr, halfLifeStd = 252, halfLifeR = 84):
 # cov0 can be inplaced by matrix that has already been adjusted by exponentWeight()
 # cov = cov0 + Sigma(wi*(covi + covi.T)) (1~q) , wi = 1 - i/(1+q), covi = Sigma(frj*frj+i.T)/t (1~t-i)
 # factor return frt  of moment 't' is influenced by moments of 't-1','t-2','t-3' ...... 't-q'
-def neweyWestRaw(fr, q):
+def neweyWestRaw(fr, q, halfLife = None):
     
     cov0 = np.zeros((np.shape(fr)[0],np.shape(fr)[0]))
     t = np.shape(fr)[1]
@@ -46,6 +46,12 @@ def neweyWestRaw(fr, q):
         cov0 = cov0 + np.dot(fr[:,i],fr[:,i].T)
     cov0 = cov0/t
 
+    # if use exponent weights or not
+    if halfLife != None:
+        w = 0.5**(1 / halfLife) * np.matrix((np.linspace(1,np,shape(fr)[1],np.shape(fr)[1])))
+        w = np.diag(w)
+        fr = np.dot(fr, w)
+ 
     sigmaCov = np.zeros((np.shape(fr)[0],np.shape(fr)[0]))
     t = np.shape(fr)[1]
     for i in range (1,q+1):
@@ -85,6 +91,11 @@ def neweyWest(exponentMat, fr, qStd = 5, qR = 2, halfLifeStd = 252, halfLifeR = 
         sigmaR = wi * (ri + ri.T) + sigmaR
     r = r0 + r
 
+    covRaw = neweyWestRaw(fr, qStd, halfLifeStd)
+    cov = covRaw.diagonal().T
+    std = np.sqrt(cov)
+
+    '''
     w = 0.5**(1 / halfLifeStd) * np.matrix((np.linspace(1,np,shape(fr)[1],np.shape(fr)[1])))
     w = np.diag(w)
     frCov = np.dot(fr, w)
@@ -100,8 +111,10 @@ def neweyWest(exponentMat, fr, qStd = 5, qR = 2, halfLifeStd = 252, halfLifeR = 
         covi = covi*(t - i)/t
         wi = 1 - i / (1+qCov)
         sigmaCov = wi * (covi + covi.T) + sigmaCov
-
-    newMatrix = exponentMat + sigmaCov
+    
+    newMatrix = exponent + sigmaCov
+    '''
+    newMatrix = np.dot(std * std.T) * r
 
     return newMatrix
 

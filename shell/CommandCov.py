@@ -239,8 +239,12 @@ def handle(sdate, edate, date):
     weight.sort_index(axis = 1 , inplace = True)
     w = np.matrix(weight)
     
-    sigma = np.cov(np.matrix(fr).T)
-    # do some adjustment
+    fr = np.matrix(fr).T
+    flr = np.matrix(flr).T
+    # fr and flr should be in the same shape!
+    sigma = np.cov(fr)
+    # do some adjustment 
+    # all input should be in form of matrix
     sigma = nothing(sigma)
     # exponent weighed adjustment
     sigma = exponentWeight(fr, halfLifeStd = 252, halfLifeR = 84)
@@ -252,6 +256,9 @@ def handle(sdate, edate, date):
     sigma = fluctuation(sigma, fr, flr)
 
     omiga = np.diag(resid.apply(lambda x: x**2).mean())
+    # do some adjustment on omiga
+
+
     covarianceMatrix = FactorCovariance(w, sigma, omiga)
     
     factorNames = list(fr.columns)
