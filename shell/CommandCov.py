@@ -245,7 +245,7 @@ def handle(sdate, edate, date):
     # exponent weighed adjustment
     sigma = exponentWeight(fr, halfLifeStd = 252, halfLifeR = 84)
     # newey-west adjustment
-    sigma = neweyWest(sigma, q = )
+    sigma = neweyWest(sigma, fr, qStd = 5, qR = 2, halfLifeStd = 252, halfLifR = 84)
     # eigen adjustment
     sigma = eigen(sigma, fr, M = 1000, alpha = 1.2)
     # fluctuation ratio adjustment

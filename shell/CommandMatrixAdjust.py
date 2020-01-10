@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import random
 import math
+from scipy.stats import pearsonr
 
 # matrix adjustment
 
@@ -28,7 +29,7 @@ def exponentWeight(fr, halfLifeStd = 252, halfLifeR = 84):
     frR = np.dot(fr, w)
     r = np.corrcoef(frR)
 
-    newMatrix = np.dot(std, std) * r
+    newMatrix = np.dot(std, std.T) * r
 
     return newMatrix
 
@@ -37,16 +38,13 @@ def exponentWeight(fr, halfLifeStd = 252, halfLifeR = 84):
 # cov0 can be inplaced by matrix that has already been adjusted by exponentWeight()
 # cov = cov0 + Sigma(wi*(covi + covi.T)) (1~q) , wi = 1 - i/(1+q), covi = Sigma(frj*frj+i.T)/t (1~t-i)
 # factor return frt  of moment 't' is influenced by moments of 't-1','t-2','t-3' ...... 't-q'
-def neweyWest(exponentWeightMat, q):
+def neweyWestRaw(fr, q):
     
-    '''
     cov0 = np.zeros((np.shape(fr)[0],np.shape(fr)[0]))
     t = np.shape(fr)[1]
     for i in range (t):
         cov0 = cov0 + np.dot(fr[:,i],fr[:,i].T)
     cov0 = cov0/t
-    '''
-    cov0 = exponentWeightMat
 
     sigmaCov = np.zeros((np.shape(fr)[0],np.shape(fr)[0]))
     t = np.shape(fr)[1]
@@ -62,6 +60,48 @@ def neweyWest(exponentWeightMat, q):
     # change cov of daily data into monthly data
     # 22 trade days per month. so monthly return is supposed to be 22 times of daily return
     newMatrix = 22*cov
+
+    return newMatrix
+
+# this newey west adjustment can adjust std matrix and r matrix respectively
+def neweyWest(exponentMat, fr, qStd = 5, qR = 2, halfLifeStd = 252, halfLifeR = 84):
+
+    factorNum = np.shape(fr)[0]
+    t = np.shape(fr)[1]
+    w = 0.5**(1 / halfLifeR) * np.matrix((np.linspace(1,np,shape(fr)[1],np.shape(fr)[1])))
+    w = np.diag(w)
+    frR = np.dot(fr, w)
+    r0 = np.corrcoef(frR)
+    sigmaR = np.zeros((factorNum,factorNum))
+    for i in range (1,qR+1):
+        fr1 = frR[:,0:t-i]
+        fr2 = frR[:,i:t]
+        ri = np.zeros((factorNum,factorNum))
+        for j in range(factorNum):
+            for k in range(j,factorNum):
+                ri[j,k] = pearsonr(fr1[j,:], fr2[k,:])[0]
+                ri[k,j] = pearsonr(fr1[k,:], fr2[j,:])[0]
+        wi = 1 - i / (1+qR)
+        sigmaR = wi * (ri + ri.T) + sigmaR
+    r = r0 + r
+
+    w = 0.5**(1 / halfLifeStd) * np.matrix((np.linspace(1,np,shape(fr)[1],np.shape(fr)[1])))
+    w = np.diag(w)
+    frCov = np.dot(fr, w)
+    sigmaCov = np.zeros((factorNum,factorNum))
+    for i in range (1,qCov+1):
+        fr1 = frCov[:,0:t-i]
+        fr2 = frCov[:,i:t]
+        covi = np.zeros((factorNum,factorNum))
+        for j in range(factorNum):
+            for k in range(j,factorNum):
+                covi[j,k] = np.std(fr1[j,:])*np.std(fr2[k,:])*r[j,k]
+                covi[k,j] = np.std(fr1[k,:])*np.std(fr2[j,:])*r[k,j]
+        covi = covi*(t - i)/t
+        wi = 1 - i / (1+qCov)
+        sigmaCov = wi * (covi + covi.T) + sigmaCov
+
+    newMatrix = exponentMat + sigmaCov
 
     return newMatrix
 
