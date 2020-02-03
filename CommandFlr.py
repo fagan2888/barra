@@ -16,11 +16,11 @@ import click
 @click.option('--edate', 'edate', default = pd.Timestamp(datetime(2020,1,21)).strftime('%Y-%m-%d'), help = 'end date')
 @click.option('--delta', 'delta', default = 21, help = 'use data of delta dates to predict fluctuation ratio')
 @click.pass_context
-def cov(ctx, sdate, edate, delta):
+def flr(ctx, sdate, edate, delta):
     ctx.invoke(handle, sdate = sdate, edate = edate, delta = delta)
 
 
-@cov.command()
+@flr.command()
 @click.option('--sdate', 'sdate', default = pd.Timestamp(datetime(2018,1,2)).strftime('%Y-%m-%d'), help = 'start date')
 @click.option('--edate', 'edate', default = pd.Timestamp(datetime(2020,1,21)).strftime('%Y-%m-%d'), help = 'end date')
 @click.option('--delta', 'delta', default = 21, help = 'use data of delta dates to predict fluctuation ratio')
@@ -52,6 +52,7 @@ def handle(ctx, sdate, edate, delta):
     df.set_index(['bf_date','bf_factor'], inplace = True)
     saveFlr(df = df, dates = dates[delta+1:])
     print('Factor return fluctucation saved! Check barra_factor_fluctucation_ratio to see more details.')
+    set_trace()
     resid = regressionResid(sdate, edate)
     stocks = set(resid['stock_id'])
     resid.sort_values(by = ['trade_date','stock_id'],ascending = True, inplace = True)
