@@ -9,7 +9,6 @@ from db.factors import styleFactors, industryFactors
 from db import database
 from db.operations import *
 from CommandMatrixAdjust import *
-from optparse import OptionParser
 from ipdb import set_trace
 import click
 
@@ -76,11 +75,8 @@ def handle(ctx, sdate, edate, delta):
    
     df = pd.concat(dfList,axis = 0)
     df.set_index(['br_date','br_stock_id'], inplace = True)
-    print(df)
-    set_trace()
     saveStockFlr(df, dates[delta+1:])
     print('Stock return resid fluctucation saved! Check barra_resid_fluctucation_ratio to see more details.')
-    set_trace()
  
     '''
     weight = factorExposure(date, industryFactors, stocks)
@@ -136,14 +132,8 @@ def handle(ctx, sdate, edate, delta):
 
 
 if __name__ == '__main__':
-    opt = OptionParser()
-    endDate = pd.Timestamp(datetime.today()).strftime('%Y-%m-%d')
-    startDate = str(int(endDate[0:4])-1)+'-01-01'
-    defaultDate = pd.Timestamp(datetime.today() - timedelta(days = 1)).strftime('%Y-%m-%d')
-    defaultDate = '2019-12-31'
-    opt.add_option('-s','--sdate',help = 'start date', default = startDate)
-    opt.add_option('-e','--edate',help = 'end date', default = endDate)
-    opt.add_option('-d','--date', help = 'date', default = defaultDate)
-    opt, arg = opt.parse_args()
-    handle(opt.sdate, opt.edate, opt.date)
+    sdate = pd.Timestamp(datetime(2018,1,2)).strftime('%Y-%m-%d')
+    edate = pd.Timestamp(datetime(2020,1,21)).strftime('%Y-%m-%d')
+    delta = 21
+    handle(sdate, edate, delta):
 
