@@ -225,4 +225,22 @@ def saveStockCovariance(mat, names, date, sdate = None, edate = None):
 
     database.batch(db, t, df, dfBase, timestamp = False)
 
+# load factor return 
+def loadFlr(sdate, edate):
+
+    db = create_engine(uris['factor'])
+    sql = "select * from `barra_factor_fluctuation_ratio` where bf_date >= '" + sdate + "' and bf_date <='" + edate +"'"
+    flr = pd.read_sql(sql, db)
+
+    return flr
+
+# load factor return 
+def loadResidFlr(sdate, edate):
+
+    db = create_engine(uris['factor'])
+    sql = "select * from `barra_resid_fluctuation_ratio` where br_date >= '" + sdate + "' and br_date <='" + edate +"'"
+    residFlr = pd.read_sql(sql, db)
+
+    return residFlr
+
 
