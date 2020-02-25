@@ -1,335 +1,158 @@
 
-
 import pandas as pd
 from sqlalchemy import *
 from datetime import datetime, timedelta
+from time import strptime
 import numpy as np
-from config import *
+from db.config import *
 from db.factors import styleFactors, industryFactors
 from db import database
-from CommandMatrixAdjust import *
-from optparse import OptionParser
+from db.operations import *
+from db.matrixAdjust import *
 from ipdb import set_trace
+import click
 
 # payback and resid is calculated in CommandCal.py
+styleFactors.sort()
 industryFactors.sort()
- 
-# load factor return 
-def factorReturn(sdate, edate):
 
-    db = create_engine(uris['multi_factor'])
-    sql = "select * from `barra_factor_return` where trade_date >= '" + sdate + "' and trade_date <='" + edate +"'"
-    payback = pd.read_sql(sql, db)
-
-    return payback
-
-# load regression resid for every stock or some stocks
-def regressionResid(sdate, edate, stocks = None):
-
-    db = create_engine(uris['multi_factor'])
-    meta = MetaData(bind = db)
-    t = Table('barra_regression_resid', meta, autoload = True)
-    columns = [
-        t.c.trade_date,
-        t.c.stock_id,
-        t.c.resid,
-    ]
-    sql = select(columns)
-    sql = sql.where(t.c.trade_date >= sdate)
-    sql = sql.where(t.c.trade_date <= edate)
-    if stocks != None:
-        sql = sql.where(t.c.stock_id.in_(stocks))
-    resid = pd.read_sql(sql, db)
-
-    return resid
-
-# load factor exposure of every stock or some stocks
-def factorExposure(date, industryFactors, stocks = None):
-
-    db = create_engine(uris['multi_factor'])
-    meta = MetaData(bind = db)
-    t = Table('factor_exposure_barra', meta, autoload = True)
-    columns = [
-        t.c.trade_date,
-        t.c.stock_id,
-        #t.c.country,
-        t.c.volatility,
-        t.c.dividend_yield,
-        t.c.quality,
-        t.c.momentum,
-        t.c.short_term_reverse,
-        t.c.value,
-        t.c.linear_size,
-        t.c.nonlinear_size,
-        t.c.growth,
-        t.c.liquidity,
-        t.c.sentiment,
-        t.c.industry, # need further treatment
-        #t.c.weight, # need further treatment
-    ]
-    sql = select(columns)
-    sql = sql.where(t.c.trade_date == date)
-    if stocks != None:
-        sql = sql.where(t.c.stock_id.in_(stocks))
-    exposure = pd.read_sql(sql, db)
-
-    w = exposure
-    w['country'] = 1
-    
-    for industry in industryFactors:
-        w[industry] = 0
-    for i in range(len(w)):
-        w['industry_'+str(w['industry'][i])][i] = 1
-    
-    w = w.drop('industry', axis = 1)
-
-    return w
-
-# calculate factor fluctuation ratio
-def FactorFluctuation(factorReturn):
-    
-    flr = factorReturn.std()
-
-    return flr
-
-# calculate covariance matirx
-def FactorCovariance(w, sigma, omiga):
-
-    covarianceMatrix = np.dot(np.dot(w,sigma),w.T) + omiga
-
-    return covarianceMatrix
-
-# calculate stock fluctuation ratio
-def stockFluctuation(stockResid):
-
-    stockFlr = stockResid.std()
-
-    return stockFlr
-
-# save factor return fluctuation ratio into barra_fluctuation_ratio
-def saveFlr(flr, date, sdate = None, edate = None):
-
-    df = pd.DataFrame(columns = ['bf_date','bf_factor','bf_flr'])
-    df['bf_factor'] = flr.index
-    df['bf_flr'] = flr.values
-    df['bf_date'] = date
-    df.set_index(['bf_date','bf_factor'], inplace = True)
-
-    db = create_engine(uris['multi_factor'])
-    meta = MetaData(bind = db)
-    t = Table('barra_factor_fluctuation_ratio', meta, autoload = True)
-    columns = [
-        t.c.bf_date,
-        t.c.bf_factor,
-        t.c.bf_flr,
-    ]
-    sql = select(columns)
-    if sdate != None:
-        sql = sql.where(t.c.bf_date >= sdate)
-    if edate != None:
-        sql = sql.where(t.c.bf_date <= edate)
-    dfBase = pd.read_sql(sql, db)
-    dfBase['bf_date'] = dfBase['bf_date'].map(lambda x: pd.Timestamp(x).strftime('%Y-%m-%d'))
-    dfBase.set_index(['bf_date','bf_factor'], inplace = True)
-
-    database.batch(db, t, df, dfBase, timestamp = False)
-
-# save factor return fluctuation ratio into barra_fluctuation_ratio
-def saveStockFlr(stockFlr, date, sdate = None, edate = None):
-
-    df = pd.DataFrame(columns = ['br_date','br_stock_id','br_flr'])
-    df['br_stock_id'] = stockFlr.index
-    df['br_flr'] = stockFlr.values
-    df['br_date'] = date
-    df.set_index(['br_date','br_stock_id'], inplace = True)
-
-    db = create_engine(uris['multi_factor'])
-    meta = MetaData(bind = db)
-    t = Table('barra_resid_fluctuation_ratio', meta, autoload = True)
-    columns = [
-        t.c.br_date,
-        t.c.br_stock_id,
-        t.c.br_flr,
-    ]
-    sql = select(columns)
-    if sdate != None:
-        sql = sql.where(t.c.br_date >= sdate)
-    if edate != None:
-        sql = sql.where(t.c.br_date <= edate)
-    dfBase = pd.read_sql(sql, db)
-    dfBase['br_date'] = dfBase['br_date'].map(lambda x: pd.Timestamp(x).strftime('%Y-%m-%d'))
-    dfBase.set_index(['br_date','br_stock_id'], inplace = True)
-
-    database.batch(db, t, df, dfBase, timestamp = False)
+@click.group(invoke_without_command = True)
+@click.option('--sdate', 'sdate', default = pd.Timestamp(datetime.today()-timedelta(days = 5)).strftime('%Y-%m-%d'), help = 'start date')
+@click.option('--edate', 'edate', default = pd.Timestamp(datetime.today()).strftime('%Y-%m-%d'), help = 'end date')
+@click.option('--delta', 'delta', default = 250, help = 'suppose that the covariance of one certain day can be affected by the data of past delta days')
+@click.option('--deltaEigen', 'deltaEigen', default = 250, help = 'time windows for eigen adjustment')
+@click.option('--cov','cov', default = False, help = 'update stock return covariance or not')
+@click.pass_context
+def cov(ctx, sdate, edate, delta, deltaEigen, cov):
+    ctx.invoke(handle, sdate = sdate, edate = edate, delta = delta, deltaEigen = deltaEigen, cov = cov)
 
 
-# save factor return covariance into barra_factor_covariance
-def saveFactorCovariance(mat, names, date, sdate = None, edate = None):
-
-    df = pd.DataFrame(columns = ['bf_date','bf_factor1','bf_factor2','bf_cov'])
-    dfFactor1 = list()
-    dfFactor2 = list()
-    covij = list()
-    i = 0
-    for name1 in names:
-        j = i
-        for name2 in names[i:]:
-            dfFactor1.append(name1)
-            dfFactor2.append(name2)
-            covij.append(mat[i,j])
-            j += 1
-        i += 1
-    df['bf_factor1'] = dfFactor1
-    df['bf_factor2'] = dfFactor2
-    df['bf_cov'] = covij
-    df['bf_date'] = date
-    df['bf_date'] = df['bf_date'].map(lambda x: pd.Timestamp(x).strftime('%Y-%m-%d'))
-    df.set_index(['bf_date','bf_factor1','bf_factor2'], inplace = True)
-    
-    db = create_engine(uris['multi_factor'])
-    meta = MetaData(bind = db)
-    t = Table('barra_factor_covariance', meta, autoload = True)
-    columns = [
-        t.c.bf_date,
-        t.c.bf_factor1,
-        t.c.bf_factor2,
-        t.c.bf_cov,
-    ]
-    sql = select(columns)
-    if sdate != None:
-        sql = sql.where(t.c.bf_date >= sdate)
-    if edate != None:
-        sql = sql.where(t.c.bf_date <= edate)
-    dfBase = pd.read_sql(sql, db)
-    dfBase['bf_date'] = dfBase['bf_date'].map(lambda x: pd.Timestamp(x).strftime('%Y-%m-%d'))
-    dfBase.set_index(['bf_date','bf_factor1','bf_factor2'], inplace = True)
-
-    database.batch(db, t, df, dfBase, timestamp = False)
-
-# save stock return covariance into barra_covariance
-def saveStockCovariance(mat, names, date, sdate = None, edate = None):
-
-    df = pd.DataFrame(columns = ['bc_date','bc_stock1','bc_stock2','bc_cov'])
-    dfStock1 = list()
-    dfStock2 = list()
-    covij = list()
-    i = 0
-    for name1 in names:
-        j = i
-        for name2 in names[i:]:
-            dfStock1.append(name1)
-            dfStock2.append(name2)
-            covij.append(mat[i,j])
-            j += 1
-        i += 1
-    df['bc_stock1'] = dfStock1
-    df['bc_stock2'] = dfStock2
-    df['bc_cov'] = covij
-    df['bc_date'] = date
-    df['bc_date'] = df['bc_date'].map(lambda x: pd.Timestamp(x).strftime('%Y-%m-%d'))
-    df.set_index(['bc_date','bc_stock1','bc_stock2'], inplace = True)
-
-    db = create_engine(uris['multi_factor'])
-    meta = MetaData(bind = db)
-    t = Table('barra_covariance', meta, autoload = True)
-    columns = [
-        t.c.bc_date,
-        t.c.bc_stock1,
-        t.c.bc_stock2,
-        t.c.bc_cov,
-    ]
-    sql = select(columns)
-    if sdate != None:
-        sql = sql.where(t.c.bc_date >= sdate)
-    if edate != None:
-        sql = sql.where(t.c.bc_date <= edate)
-    dfBase = pd.read_sql(sql, db)
-    dfBase['bc_date'] = dfBase['bc_date'].map(lambda x: pd.Timestamp(x).strftime('%Y-%m-%d'))
-    dfBase.set_index(['bc_date','bc_stock1','bc_stock2'], inplace = True)
-
-    database.batch(db, t, df, dfBase, timestamp = False)
-
+@cov.command()
 # main function
-def handle(sdate, edate, date):
-    
-    fr = factorReturn(sdate, edate)
-    fr.set_index('trade_date', inplace = True)
-    fr.sort_index(ascending = True, inplace = True)
-    fr.sort_index(axis = 1, inplace = True)
-    fr = fr.fillna(0)
-    factorNames = list(fr.columns)
-  
-    flr = FactorFluctuation(fr)
-    saveFlr(flr = flr, date = date)
-    print('Factor return fluctucation saved! Check barra_factor_fluctucation_ratio to see more details.')
+def handle(sdate, edate, delta, deltaEigen, cov):
 
-    resid = regressionResid(sdate, edate)
-    stocks = set(resid['stock_id'])
-    resid.sort_values(by = ['trade_date','stock_id'],ascending = True, inplace = True)
-    resid.set_index(['trade_date','stock_id'], inplace = True)
-    resid = resid.unstack()['resid'].fillna(0)
-    stockIds = list(resid.columns)
+    sdate = pd.Timestamp(sdate).strftime('%Y-%m-%d')
+    edate = pd.Timestamp(edate).strftime('%Y-%m-%d')
+    #
+    startDate = pd.Timestamp(datetime.strptime(sdate, '%Y-%m-%d') - timedelta(days = delta+200)).strftime('%Y-%m-%d')
+    startDateFlr = pd.Timestamp(datetime.strptime(sdate, '%Y-%m-%d') - timedelta(days = delta+200)).strftime('%Y-%m-%d')
    
-    weight = factorExposure(date, industryFactors, stocks)
-    weight.sort_values(by = ['trade_date','stock_id'],ascending = True, inplace = True)
-    weight.set_index(['trade_date','stock_id'], inplace = True)
-    weight.sort_index(axis = 1 , inplace = True)
-    w = np.matrix(weight)
+    fr = factorReturn(startDate, edate)
+    flr = loadFlr(startDateFlr, edate)
+    fr.loc[:,'trade_date'] = fr['trade_date'].apply(lambda x: pd.Timestamp(x).strftime('%Y-%m-%d'))
+    flr.loc[:,'bf_date'] = flr['bf_date'].apply(lambda x: pd.Timestamp(x).strftime('%Y-%m-%d'))
+ 
+    if len(fr[fr.trade_date >= sdate]) == 0 or len(flr[flr.bf_date >= sdate]) == 0:
+        print('no data between sdate and edate! please check factor return table and fluctuation table. or you can change sdate/edate')
+        exit()
     
-    fr = np.matrix(fr).T
-    flr = np.matrix(flr).T
-    # fr and flr should be in the same shape!
-    sigma = np.cov(fr)
+    dates = list(set(fr.trade_date).intersection(set(flr.bf_date)))
+    dates.sort()
+    if len(dates) < delta+1:
+        print('data is not enough for fitting time window. please check factor return table and fluctuation table. or you can change sdate/edate or time window')
+        exit()
+
+    datesHelper = [t for t in dates if t >= sdate]
+    if len(dates) - len(datesHelper) < delta:
+        sdate = dates[delta]
+        startDateFlr = dates[0]
+        startDate = dates[1]
+    else:
+        startDate = dates[len(dates)-len(datesHelper)-(delta-1)]
+        startDateFlr = dates[len(dates) -len(datesHelper)-delta]
+
+    fr = fr[fr.trade_date >= startDate]
+    flr = flr[flr.bf_date >= startDateFlr]
+    # flr used in the model  is not the real flr but the flr predicted by data delta days before
+    dayMax = max(dates)
+    flr = flr[flr['bf_date']<dayMax]
+    datesFr = list(set(fr['trade_date']))
+    datesFr.sort()
+    datesFlr = list(set(flr['bf_date']))
+    datesFlr.sort()
+    flr['bf_date'] = flr['bf_date'].map(lambda x: datesFr[datesFlr.index(x)])
+    
+    # trade dates recorded in resid table and factor return table should be the same
+    # trade dates recorded in residFlr table and flr table should be the same
+    resid = regressionResid(startDate, edate)
+    residFlr = loadResidFlr(startDateFlr, edate)
+    resid.loc[:,'trade_date'] = resid['trade_date'].apply(lambda x: pd.Timestamp(x).strftime('%Y-%m-%d'))
+    residFlr.loc[:,'br_date'] = residFlr['br_date'].apply(lambda x: pd.Timestamp(x).strftime('%Y-%m-%d'))
+    # flr used in the model  is not the real flr but the flr predicted by data delta days before
+    dayMax = max(dates)
+    residFlr = residFlr[residFlr['br_date']<dayMax]
+    datesFr = list(set(resid['trade_date']))
+    datesFr.sort()
+    datesFlr = list(set(residFlr['br_date']))
+    datesFlr.sort()
+    residFlr['br_date'] = residFlr['br_date'].map(lambda x: datesFr[datesFlr.index(x)])
+    
+    dates = set(resid['trade_date']).intersection(set(residFlr['br_date']).intersection(set(fr['trade_date']).intersection(set(flr['bf_date']))))
+    dates =  list(dates)
+
+    Exposure = factorExposure(dates, industryFactors)
+    Exposure.loc[:,'trade_date'] = Exposure['trade_date'].apply(lambda x: pd.Timestamp(x).strftime('%Y-%m-%d'))
+ 
+    dates = list(set(dates).intersection(set(Exposure['trade_date'])))
+    dates.sort()
+
+    factorNames = ['country'] + styleFactors + industryFactors
+    
+    fr = fr[fr['trade_date'].isin(dates)]
+    flr = flr[flr['bf_date'].isin(dates)]
+    fr = fr.set_index('trade_date').sort_index(axis = 0, ascending = True)
+    flr = flr.set_index(['bf_date','bf_factor']).sort_index(level = 0, axis = 0, ascending = True).unstack()['bf_flr']
+    fr = fr[factorNames]
+    flr = flr[factorNames]
+
     # do some adjustment 
-    # all input should be in form of matrix
-    sigma = nothing(sigma)
     # exponent weighed adjustment
-#    sigma = exponentWeight(fr, halfLifeStd = 252, halfLifeR = 84)
+    std, r, frStd, frR = exponentWeight(fr, sdate, halfLifeStd = 252, halfLifeR = 84, weight = True) 
     # newey-west adjustment
-#    sigma = neweyWest(sigma, fr, qStd = 5, qR = 2, halfLifeStd = 252, halfLifR = 84)
-    # eigen adjustment
-#    sigma = eigen(sigma, fr, M = 1000, alpha = 1.2)
+    sigma = neweyWest(std, r, frStd, frR, qStd = 5, qR = 2)
+    # eigen adjustment ############# there is sth wrong with this ##############
+    #sigma = eigen(sigma, M = 1000, alpha = 1.2, timeWindows = deltaEigen)
     # fluctuation ratio adjustment
-#    sigma = fluctuation(sigma, fr, flr)
+    sigma = fluctuation(sigma, fr, flr, sdate)
 
-    residFlr = stockFluctuation(resid)
-    saveStockFlr(residFlr, date)
-    print('Stock return resid fluctucation saved! Check barra_resid_fluctucation_ratio to see more details.')
-
-    # do some adjustment on omiga
-    # if do nothing
-    omiga = np.diag(resid.apply(lambda x: x**2).mean())
-    # all input should be in form of matrix
-    resid = np.mat(resid).T
-    residFlr = np.mat(residFlr).T
-    # exponent weighed adjustment
-#    omiga = exponentWeight(resid, halfLifeStd = 84, halfLifeR = 84)
-    # newey-west adjustment
-#    omiga = neweyWest(omiga, resid, qStd = 5, qR = 5, halfLifeStd = 84, halfLife = 84)
-    # structure model adjustment
-#    omiga = structure(omiga)
-    # bayes adjustment
-#    omiga = bayes(omiga)
-    # fluctuation ratio adjustment
-#    omiga = fluctuation(omiga, resid, residFlr)
-
-    covarianceMatrix = FactorCovariance(w, sigma, omiga)
+    if len(sigma) == 0:
+        print('covariance empty! please change sdate and edate!')
+        exit()
     
-    saveFactorCovariance(sigma, factorNames, date)
+    saveFactorCovariance(sigma, factorNames, list(fr[fr.index >= sdate].index))
     print('Factor return covariance saved! Check barra_factor_covariance to see more details.') 
-    saveStockCovariance(covarianceMatrix, stockIds, date)  ##### slow #####
-    print('Stock return covariance saved! Check barra_stock_covariance to see more details.')
+    
+    resid = resid[resid['trade_date'].isin(dates)]
+    residFlr = residFlr[residFlr['br_date'].isin(dates)]
+    resid = resid.set_index(['trade_date','stock_id']).sort_index(axis = 0, ascending = True)
+    residFlr = residFlr.set_index(['br_date','br_stock_id']).sort_index(axis = 0, ascending = True)
+    resid = resid.unstack()['resid']
+    residFlr = residFlr.unstack()['br_flr']
+    
+    Exposure = Exposure[Exposure['trade_date'].isin(dates)]
+    Exposure = Exposure.set_index('trade_date').sort_index(axis = 0, ascending = True)
+    weight = Exposure[Exposure.index >= sdate] [['stock_id','weight']]
+    exposure = Exposure[Exposure.index >= sdate] [['stock_id'] + factorNames] 
 
+    Dates = [pd.Timestamp(date).strftime('%Y-%m-%d') for date in dates]
+    Dates = [date for date in Dates if date >= sdate]
+    Dates.sort()
+    # do some adjustment on omiga
+    # exponent weighed adjustment
+    residExponent = exponentWeightOmiga(resid, sdate, halfLife = 84, weight = True)
+    # newey-west adjustment
+    omiga = neweyWestOmiga(residExponent, q = 5) ##### slow #######
+    # structure model adjustment 
+    omiga = structure(omiga, resid, residFlr, exposure, Dates, h = 252, E0 = 1.05)
+    # bayes adjustment
+    omiga = bayes(omiga, weight, Dates, groups = 10, q = 1)
+    # fluctuation ratio adjustment
+    omiga = fluctuationOmiga(omiga, resid, residFlr, Exposure[['stock_id','weight']], sdate, list(resid[resid.index >= sdate].index))
 
-if __name__ == '__main__':
-    opt = OptionParser()
-    endDate = pd.Timestamp(datetime.today()).strftime('%Y-%m-%d')
-    startDate = str(int(endDate[0:4])-1)+'-01-01'
-    defaultDate = pd.Timestamp(datetime.today() - timedelta(days = 1)).strftime('%Y-%m-%d')
-    defaultDate = '2019-12-31'
-    opt.add_option('-s','--sdate',help = 'start date', default = startDate)
-    opt.add_option('-e','--edate',help = 'end date', default = endDate)
-    opt.add_option('-d','--date', help = 'date', default = defaultDate)
-    opt, arg = opt.parse_args()
-    handle(opt.sdate, opt.edate, opt.date)
+    saveStockVariance(omiga, Dates)
+    print('stock variance saved! Check barra_stock_variance to see more details.')
 
+    if cov != False:
+        covarianceMatrixList = FactorCovariance(exposure, sigma, omiga, Dates)
+        saveStockCovariance(covarianceMatrixList, Dates)
+        print('Stock return covariance saved! Check barra_stock_covariance to see more details.')
