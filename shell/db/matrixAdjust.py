@@ -381,12 +381,15 @@ def fluctuationOmiga(omigaAll, rAll, flrAll, weightAll, sdate, dates):
         r = rAll[date].loc[stocks,:]
         flr = flrAll[date].loc[stocks,:]
         weight = weightAll[date].loc[stocks,:]
+        omiga = omigaAll[date]
+        omiga.index = omiga.columns
+        omiga = omiga.loc[stocks,stocks]
         for k in range (weight.shape[1]):
             weight.iloc[:,k] = weight.iloc[:,k] / sum(weight.iloc[:,k])
         r = np.mat(r)
         flr = np.mat(flr)
         weight = np.mat(weight)
-        omiga = np.mat(omigaAll[date])
+        omiga = np.mat(omiga)
         sigma = np.zeros((1,delta))  
         stockNum = np.shape(omiga)[0]
         for i in range(stockNum): 
