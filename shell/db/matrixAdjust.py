@@ -226,7 +226,8 @@ def structure(neweyWestAll, rAll, flrAll, exposureAll, dates, h = 252, E0 = 1.05
         stocks = set(neweyWestDf.columns).intersection(set(r.columns).intersection(set(flr.columns).intersection(set(list(exposure.stock_id)))))
         stocks = list(stocks)
         stocks.sort()
-        neweyWestDf = neweyWestDf[stocks].sort_index(axis = 1, ascending = True)
+        neweyWestDf.index = neweyWestDf.columns
+        neweyWestDf = neweyWestDf.loc[stocks,stocks]
         r = r[stocks].sort_index(axis = 1, ascending = True)
         flr = flr[stocks].sort_index(axis = 1, ascending = True)
         exposure = exposure[exposure.stock_id.isin(stocks)].fillna(0).sort_values(by = 'stock_id', ascending = True)
@@ -289,7 +290,8 @@ def bayes(structureAll, weightAll, dates, groups = 10, q = 1):
         weightDf = weightAll[weightAll.index == dates[t]]
         stocks = list(set(structureDf.columns).intersection(set(weightDf['stock_id'])))
         stocks.sort()
-        structureDf = structureDf[stocks]
+        structureDf.index = structureDf.columns
+        structureDf = structureDf.loc[stocks,stocks]
         weight = weightDf[weightDf.stock_id.isin(stocks)].sort_values(by = 'stock_id')['weight']
         structureMat = np.mat(structureDf)
 
