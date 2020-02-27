@@ -224,11 +224,12 @@ def structure(neweyWestAll, rAll, flrAll, exposureAll, dates, h = 252, E0 = 1.05
         exposure = exposureAll[exposureAll.index == dates[date]]
         neweyWestDf = neweyWestAll[date]
         stocks = set(neweyWestDf.columns).intersection(set(r.columns).intersection(set(flr.columns).intersection(set(list(exposure.stock_id)))))
+        stocks = list(stocks)
+        stocks.sort()
         neweyWestDf = neweyWestDf[stocks].sort_index(axis = 1, ascending = True)
         r = r[stocks].sort_index(axis = 1, ascending = True)
         flr = flr[stocks].sort_index(axis = 1, ascending = True)
         exposure = exposure[exposure.stock_id.isin(stocks)].fillna(0).sort_values(by = 'stock_id', ascending = True)
-        stocks = list(r.columns)
         r = np.mat(r.T)
         flr = np.mat(flr.T)
         exposure = np.mat(exposure.set_index('stock_id'))
